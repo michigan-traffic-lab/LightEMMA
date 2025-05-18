@@ -1,0 +1,7 @@
+setup.py
+lightemma.egg-info/PKG-INFO
+lightemma.egg-info/SOURCES.txt
+lightemma.egg-info/dependency_links.txt
+lightemma.egg-info/entry_points.txt
+lightemma.egg-info/requires.txt
+lightemma.egg-info/top_level.txt

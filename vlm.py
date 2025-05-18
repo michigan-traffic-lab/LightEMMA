@@ -11,7 +11,7 @@ class ModelHandler:
     Supports both API-based models and local models.
     """
     
-    def __init__(self, model_name, config_path="config.yaml"):
+    def __init__(self, model_name, config_path="config.yaml", model_weights=None):
         """
         Initialize the model handler.
         """
@@ -19,6 +19,7 @@ class ModelHandler:
         self.model_instance = None
         self.processor = None
         self.config = self._load_config(config_path)
+        self.model_weights = model_weights
         
     def _load_config(self, config_path):
         """
@@ -44,7 +45,10 @@ class ModelHandler:
                 # Import Qwen modules only when needed
                 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
                 
-                if self.model_name == "qwen2.5-7b":
+                if self.model_weights:
+                    print(f"Using custom model weights from: {self.model_weights}")
+                    model_path = self.model_weights
+                elif self.model_name == "qwen2.5-7b":
                     print("Initializing Qwen2.5-VL-7B-Instruct model...")
                     model_path = "Qwen/Qwen2.5-VL-7B-Instruct"
                 else:
@@ -69,7 +73,10 @@ class ModelHandler:
                 from transformers import AutoModelForCausalLM
                 from deepseek_vl2.models import DeepseekVLV2Processor
                 
-                if self.model_name == "deepseek-vl2-16b":
+                if self.model_weights:
+                    print(f"Using custom model weights from: {self.model_weights}")
+                    model_path = self.model_weights
+                elif self.model_name == "deepseek-vl2-16b":
                     print("Initializing DeepSeek-VL2-16B model...")
                     model_path = "deepseek-ai/deepseek-vl2-tiny"  # Small model corresponds to 16B
                 else:
@@ -95,7 +102,10 @@ class ModelHandler:
                 # Import Llama modules only when needed
                 from transformers import MllamaForConditionalGeneration, AutoProcessor
                 
-                if self.model_name == "llama-3.2-11b":
+                if self.model_weights:
+                    print(f"Using custom model weights from: {self.model_weights}")
+                    model_path = self.model_weights
+                elif self.model_name == "llama-3.2-11b":
                     print("Initializing Llama 3.2-11B model...")
                     model_path = "meta-llama/Llama-3.2-11B-Vision-Instruct"
                 else:

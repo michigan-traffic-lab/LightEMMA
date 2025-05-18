@@ -6,12 +6,13 @@ api_keys:
   huggingface: "your-huggingface-api-key"  # To download models from HuggingFace
 
 model_path:
-  huggingface: "path/to/huggingface/models"  # directory to store downloaded models
+  huggingface: "/home/yanglei/Qwen2.5-VL-3B-Instruct"  # directory to store downloaded models
 
 # Dataset
 data:
-  root: "/path/to/nuscenes"  # Path to nuScenes dataset
-  version: "v1.0-mini"  # Dataset version (v1.0-mini, v1.0-trainval, v1.0-test)
+  root: "data/nuscenes"  # Path to nuScenes dataset
+  # root: "data/v2x-seq-nuscenes/vehicle-side"  # Path to nuScenes dataset
+  version: "v1.0-trainval"  # Dataset version (v1.0-mini, v1.0-trainval, v1.0-test)
   results: "results"  # Directory to store results
 
 # Prediction Parameters (do not change)

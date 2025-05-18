@@ -11,12 +11,14 @@ from vlm import ModelHandler
 
 def parse_args():
     parser = argparse.ArgumentParser(description="LightEMMA: End-to-End Autonomous Driving")
-    parser.add_argument("--model", type=str, default="gpt-4o", 
+    parser.add_argument("--model", type=str, default="qwen2.5-3b", 
                         help="Model to use for reasoning (default: gpt-4o, "
                         "options: gpt-4o, gpt-4.1, claude-3.7, claude-3.5, "
                         "gemini-2.5, gemini-2.0, qwen2.5-7b, qwen2.5-72b, "
                         "deepseek-vl2-16b, deepseek-vl2-28b, llama-3.2-11b, "
                         "llama-3.2-90b)")
+    parser.add_argument("--model_weights", type=str, default="/home/yanglei/QWen/Qwen2.5-VL-3B-Instruct/",
+                        help="Path to local model weights (for local models only)")
     parser.add_argument("--config", type=str, default="config.yaml",
                         help="Path to the configuration file (default: config.yaml)")
     parser.add_argument("--scene", type=str, default=None,
@@ -55,7 +57,7 @@ def run_prediction():
     TTL_LEN = OBS_LEN + FUT_LEN + EXT_LEN 
     
     # Initialize model
-    model_handler = ModelHandler(args.model, args.config)
+    model_handler = ModelHandler(args.model, args.config, model_weights=args.model_weights)
     model_handler.model_instance, model_handler.processor = model_handler.initialize_model()
     print(f"Using model: {args.model}")
     
@@ -131,6 +133,11 @@ def run_prediction():
             front_camera_images.append(
                 os.path.join(nusc.dataroot, cam_front_data["filename"])
             )
+            '''
+            cam_front_data = nusc.get("sample_data", sample["data"]["LIDAR_TOP"])
+            front_camera_image = os.path.join(nusc.dataroot, cam_front_data["filename"].replace("velodyne", "image").replace("bin", "jpg"))
+            front_camera_images.append(front_camera_image)
+            '''
             
             # Get the camera parameters
             camera_params.append(

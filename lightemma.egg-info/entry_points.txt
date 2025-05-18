@@ -1,0 +1,5 @@
+[console_scripts]
+lightemma-baseline = evaluate_baseline:main
+lightemma-compare = evaluate_all:main
+lightemma-eval = evaluate_single:main
+lightemma-predict = predict_vlm:run_prediction
