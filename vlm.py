@@ -329,7 +329,9 @@ class ModelHandler:
                     "content": [
                         {
                             "type": "image",
-                            "image": image_path
+                            "image": image_path,
+                            "resized_height": 540,
+                            "resized_width": 960,
                         },
                         {"type": "text", "text": prompt}
                     ]

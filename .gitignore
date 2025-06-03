@@ -1,0 +1,8 @@
+debug/
+__pycache__/
+results/
+plate_detection/
+bev_output/
+trajectory_output/
+
+*.out

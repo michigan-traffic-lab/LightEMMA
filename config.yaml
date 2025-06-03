@@ -11,7 +11,9 @@ model_path:
 # Dataset
 data:
   root: "data/nuscenes"  # Path to nuScenes dataset
-  # root: "data/v2x-seq-nuscenes/vehicle-side"  # Path to nuScenes dataset
+  root: "data/v2x-seq-nuscenes/vehicle-side"  # Path to nuScenes dataset
+  root: "data/v2x-seq-nuscenes/infrastructure-side"  # Path to nuScenes dataset
+  root: "data/v2x-seq-nuscenes/cooperative"  # Path to nuScenes dataset
   version: "v1.0-trainval"  # Dataset version (v1.0-mini, v1.0-trainval, v1.0-test)
   results: "results"  # Directory to store results
 

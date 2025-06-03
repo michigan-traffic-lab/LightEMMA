@@ -331,6 +331,7 @@ def evaluate_predictions(results_dir, data_dir, generate_vis=True):
 
                     # Create visualization if requested
                     if generate_vis:
+                        print(f"Generating visualization for frame {frame_idx} in scene {scene_name}")
                         # Convert image path to accessible path
                         image_path = convert_image_path(
                             frame["image_path"],
@@ -344,6 +345,40 @@ def evaluate_predictions(results_dir, data_dir, generate_vis=True):
                         # Check if the image file exists
                         if os.path.exists(image_path):
                             camera_params = frame["camera_params"]
+
+                            # Convert rotation matrix to quaternion if it's in matrix format
+                            if "rotation" in camera_params:
+                                rotation = camera_params["rotation"]
+                                # Check if rotation is a matrix (list of lists or numpy array)
+                                if isinstance(rotation, (list, np.ndarray)):
+                                    # Check for 3x3 matrix (list of lists or 2D array)
+                                    if (isinstance(rotation, list) and len(rotation) == 3 and 
+                                        all(isinstance(row, (list, np.ndarray)) and len(row) == 3 for row in rotation)):
+                                        # 3x3 rotation matrix as list of lists
+                                        rotation_matrix = np.array(rotation)
+                                        quaternion = rotation_matrix_to_quaternion(rotation_matrix)
+                                        camera_params["rotation"] = quaternion
+                                        print(f"Converted 3x3 rotation matrix (list of lists) to quaternion: {quaternion}")
+                                    elif isinstance(rotation, np.ndarray) and rotation.shape == (3, 3):
+                                        # 3x3 rotation matrix as numpy array
+                                        quaternion = rotation_matrix_to_quaternion(rotation)
+                                        camera_params["rotation"] = quaternion
+                                        print(f"Converted 3x3 rotation matrix (numpy array) to quaternion: {quaternion}")
+                                    elif len(rotation) == 4:
+                                        # Already in quaternion format (w, x, y, z)
+                                        print(f"Rotation already in quaternion format: {rotation}")
+                                    elif len(rotation) == 9:
+                                        # Flattened 3x3 rotation matrix
+                                        rotation_matrix = np.array(rotation).reshape(3, 3)
+                                        quaternion = rotation_matrix_to_quaternion(rotation_matrix)
+                                        camera_params["rotation"] = quaternion
+                                        print(f"Converted flattened rotation matrix to quaternion: {quaternion}")
+                                    else:
+                                        print(f"Unknown rotation format: {type(rotation)}, shape/length: {rotation.shape if hasattr(rotation, 'shape') else len(rotation) if hasattr(rotation, '__len__') else 'N/A'}")
+                                else:
+                                    print(f"Rotation is not a list or numpy array: {type(rotation)}")
+                            
+                            print(camera_params)
                             ego_pos = frame["ego_info"]["position"]
                             ego_heading = frame["ego_info"]["heading"]
 

@@ -27,6 +27,105 @@ def quaternion_to_yaw(quaternion):
     return yaw
 
 
+def rotation_matrix_to_quaternion(rotation_matrix):
+    """
+    Convert a 3x3 rotation matrix to a quaternion (w, x, y, z).
+    Handles non-orthogonal matrices by finding the closest orthogonal matrix using SVD.
+    
+    Parameters:
+    rotation_matrix (numpy.ndarray): A 3x3 rotation matrix.
+    
+    Returns:
+    tuple: A tuple (w, x, y, z) representing the quaternion.
+    """
+    # Ensure input is a numpy array
+    R = np.array(rotation_matrix, dtype=np.float64)
+    
+    # Check if matrix is 3x3
+    if R.shape != (3, 3):
+        raise ValueError(f"Expected 3x3 matrix, got shape {R.shape}")
+    
+    # Check if matrix is close to orthogonal
+    should_be_identity = R @ R.T
+    identity = np.eye(3)
+    orthogonality_error = np.linalg.norm(should_be_identity - identity)
+    
+    if orthogonality_error > 1e-6:
+        print(f"Warning: Matrix is not orthogonal (error: {orthogonality_error:.2e}). "
+              f"Finding closest orthogonal matrix using SVD.")
+        
+        # Use SVD to find the closest orthogonal matrix
+        U, s, Vt = np.linalg.svd(R)
+        
+        # The closest orthogonal matrix is U @ Vt
+        R_orthogonal = U @ Vt
+        
+        # Ensure proper rotation matrix (determinant = 1, not -1)
+        if np.linalg.det(R_orthogonal) < 0:
+            # Flip the last column of U to ensure det = 1
+            U[:, -1] *= -1
+            R_orthogonal = U @ Vt
+        
+        R = R_orthogonal
+        print(f"Corrected matrix orthogonality error: {np.linalg.norm((R @ R.T) - identity):.2e}")
+    
+    try:
+        # Use pyquaternion to convert rotation matrix to quaternion
+        q = Quaternion(matrix=R)
+        return (q.w, q.x, q.y, q.z)
+    except Exception as e:
+        print(f"Error converting matrix to quaternion with pyquaternion: {e}")
+        
+        # Fallback: manual conversion using Shepperd's method
+        return _manual_rotation_matrix_to_quaternion(R)
+
+
+def _manual_rotation_matrix_to_quaternion(R):
+    """
+    Manual conversion from rotation matrix to quaternion using Shepperd's method.
+    This is a fallback when pyquaternion fails.
+    
+    Parameters:
+    R (numpy.ndarray): A 3x3 orthogonal rotation matrix.
+    
+    Returns:
+    tuple: A tuple (w, x, y, z) representing the quaternion.
+    """
+    trace = np.trace(R)
+    
+    if trace > 0:
+        s = np.sqrt(trace + 1.0) * 2  # s = 4 * qw
+        qw = 0.25 * s
+        qx = (R[2, 1] - R[1, 2]) / s
+        qy = (R[0, 2] - R[2, 0]) / s
+        qz = (R[1, 0] - R[0, 1]) / s
+    elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+        s = np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2  # s = 4 * qx
+        qw = (R[2, 1] - R[1, 2]) / s
+        qx = 0.25 * s
+        qy = (R[0, 1] + R[1, 0]) / s
+        qz = (R[0, 2] + R[2, 0]) / s
+    elif R[1, 1] > R[2, 2]:
+        s = np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2  # s = 4 * qy
+        qw = (R[0, 2] - R[2, 0]) / s
+        qx = (R[0, 1] + R[1, 0]) / s
+        qy = 0.25 * s
+        qz = (R[1, 2] + R[2, 1]) / s
+    else:
+        s = np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2  # s = 4 * qz
+        qw = (R[1, 0] - R[0, 1]) / s
+        qx = (R[0, 2] + R[2, 0]) / s
+        qy = (R[1, 2] + R[2, 1]) / s
+        qz = 0.25 * s
+    
+    # Normalize the quaternion
+    norm = np.sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
+    if norm > 0:
+        qw, qx, qy, qz = qw/norm, qx/norm, qy/norm, qz/norm
+    
+    return (qw, qx, qy, qz)
+
+
 def global_to_ego_frame(cur_pos, cur_heading, positions):
     """
     Transforms a list of global positions to the ego vehicle's local frame.

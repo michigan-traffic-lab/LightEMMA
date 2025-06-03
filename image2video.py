@@ -16,7 +16,7 @@ def images_to_video(image_folder, output_video, fps=30, img_formats=None):
         img_formats: 图片格式列表，例如['*.jpg', '*.png']
     """
     if img_formats is None:
-        img_formats = ['*.jpg']
+        img_formats = ['*.jpg', '*.png']
     
     # 获取所有支持格式的图片并合并
     images = []
@@ -60,7 +60,7 @@ def main():
     parser.add_argument('-i', '--input', required=True, help='图片文件夹路径')
     parser.add_argument('-o', '--output', required=True, help='输出视频文件路径')
     parser.add_argument('-f', '--fps', type=int, default=12, help='帧率 (默认: 30)')
-    parser.add_argument('--formats', nargs='+', default=['*.jpg'], 
+    parser.add_argument('--formats', nargs='+', default=['*.jpg', '*.png'], 
                         help='图片格式列表 (默认: *.jpg，可指定多个格式，如: --formats *.jpg *.png)')
     
     args = parser.parse_args()
