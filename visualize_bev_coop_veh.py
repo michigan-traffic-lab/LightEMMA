@@ -52,7 +52,6 @@ class BEVVisualizer:
         
         # Load v2i_pair.json for infrastructure mapping
         self.v2i_pairs = self._load_v2i_pairs()
-        self.i2v_pairs = self._load_i2v_pairs()
     
     def _load_v2i_pairs(self):
         """Load v2i_pair.json for infrastructure frame mapping"""
@@ -62,16 +61,6 @@ class BEVVisualizer:
                 return json.load(f)
         except Exception as e:
             print(f"Warning: Could not load v2i_pair.json: {e}")
-            return {}
-    
-    def _load_i2v_pairs(self):
-        """Load i2v_pair.json for vehicle frame mapping"""
-        i2v_path = "data/v2x-seq-nuscenes/cooperative/i2v_pair.json"
-        try:
-            with open(i2v_path, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Warning: Could not load i2v_pair.json: {e}")
             return {}
     
     def _get_infrastructure_position(self, sample_token):
@@ -803,18 +792,7 @@ class BEVVisualizer:
         # Add grid
         ax.grid(True)
         
-        # Add colorbar for vehicle points
-        cbar = plt.colorbar(ax.collections[0], ax=ax, shrink=0.8)
-        cbar.set_label('Z (height) - Vehicle')
-        
-        # Add colorbar for infrastructure points if available
-        if infra_points_transformed is not None and len(infra_points_transformed) > 0 and len(ax.collections) > 1:
-            # Create a second colorbar for infrastructure points
-            import matplotlib as mpl
-            cbar2 = plt.colorbar(ax.collections[1], ax=ax, shrink=0.8, pad=0.15)
-            cbar2.set_label('Z (height) - Infrastructure')
-        
-        # Add legend for box categories and infrastructure
+        # Add legend for point cloud and infrastructure (without box categories)
         handles = []
         labels = []
         
@@ -827,20 +805,16 @@ class BEVVisualizer:
             handles.append(plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=5))
             labels.append('Infrastructure Points')
         
-        # Add box category legend entries
-        for category, color in self.category_colors.items():
-            if category != 'default':
-                handle = plt.Rectangle((0, 0), 1, 1, color=color)
-                handles.append(handle)
-                labels.append(category)
-        
         # Add infrastructure legend entry if present
+        '''
         if infra_pos:
             infra_handle = plt.Circle((0, 0), 1, color='purple', alpha=0.8)
             handles.append(infra_handle)
             labels.append(f'Infrastructure ({coord_label})')
-        
-        ax.legend(handles, labels, loc='upper right')
+        '''
+        # Only show legend if there are items to display
+        if handles:
+            ax.legend(handles, labels, loc='upper right')
         
         # Save if save_path is provided
         if save_path:
@@ -1003,7 +977,8 @@ class BEVVisualizer:
                                 elif vis_type == 'combined':
                                     # For combined visualization, we need to save the image directly
                                     combined_image = self.visualize_combined(self.nusc.dataroot, sample_token, 
-                                                                           save_path=frame_path, show_plot=False)
+                                                                           save_path=frame_path, show_plot=False,
+                                                                           coordinate_system='vehicle', show_infrastructure_points=True)
                                 else:
                                     print(f"    ✗ Unknown visualization type: {vis_type}")
                                     continue
@@ -1174,98 +1149,178 @@ class BEVVisualizer:
         
         print(f"✓ All frames summary report saved to: {report_path}")
 
-    def visualize_combined(self, dataroot, sample_token, save_path=None, show_plot=True):
+    def visualize_combined(self, dataroot, sample_token, save_path=None, show_plot=True, coordinate_system='vehicle', show_infrastructure_points=True):
         """
-        Visualize combined BEV and image view side by side
+        Visualize combined BEV with vehicle and infrastructure images side by side
         
         Args:
             dataroot: Path to the dataset root
             sample_token: Token of the sample to visualize
             save_path: Path to save the visualization (if None, default path is used)
             show_plot: Whether to display the plot
+            coordinate_system: 'world' or 'vehicle' - coordinate system to use for infrastructure visualization
+            show_infrastructure_points: Whether to show infrastructure point cloud
             
         Returns:
             combined_image: Combined visualization image
         """
-        # Create a figure with two subplots side by side
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+        # Create a figure with custom layout: BEV on left, stacked images on right
+        import matplotlib.gridspec as gridspec
+        fig = plt.figure(figsize=(24, 12))
+        gs = gridspec.GridSpec(2, 2, width_ratios=[1, 1], height_ratios=[1, 1])
         
-        # Generate BEV visualization
-        points = self.get_point_cloud(sample_token)
+        # Left side: BEV (spans both rows)
+        ax_bev = fig.add_subplot(gs[:, 0])
+        # Right side top: Vehicle image
+        ax_vehicle = fig.add_subplot(gs[0, 1])
+        # Right side bottom: Infrastructure image
+        ax_infra = fig.add_subplot(gs[1, 1])
+        
+        # Generate BEV visualization (similar to visualize_bev)
+        print(f"Visualizing Combined BEV with coordinate system: {coordinate_system}")
+        
+        # Get vehicle point cloud and boxes
+        vehicle_points = self.get_point_cloud(sample_token)
         boxes = self.get_boxes(sample_token)
         
-        # Filter points and boxes in range
-        points = self.filter_points_in_range(points)
+        # Get infrastructure position if available
+        infra_pos = self._get_infrastructure_position(sample_token)
+        
+        # Get infrastructure point cloud and transform it if needed
+        infra_points_transformed = None
+        if show_infrastructure_points and infra_pos and coordinate_system == 'vehicle':
+            infrastructure_frame = infra_pos['infrastructure_frame']
+            infra_points = self._get_infrastructure_point_cloud(infrastructure_frame)
+            if infra_points is not None:
+                infra_points_transformed = self._transform_infrastructure_points_to_vehicle(infra_points, sample_token)
+        
+        # Filter vehicle points and boxes in range
+        vehicle_points = self.filter_points_in_range(vehicle_points)
         boxes = self.filter_boxes_in_range(boxes)
         
-        # Plot BEV on left subplot
-        ax1.scatter(points[:, 0], points[:, 1], s=0.5, c=points[:, 2], cmap='viridis', alpha=self.point_cloud_alpha)
+        # Filter infrastructure points in range
+        if infra_points_transformed is not None:
+            infra_points_transformed = self.filter_points_in_range(infra_points_transformed)
+        
+        print(f"Combined view - Vehicle points: {len(vehicle_points)}")
+        if infra_points_transformed is not None:
+            print(f"Combined view - Infrastructure points (transformed): {len(infra_points_transformed)}")
+        
+        # ===== LEFT: BEV Visualization =====
+        # Plot vehicle point cloud on BEV (blue-green colormap)
+        scatter_vehicle = ax_bev.scatter(vehicle_points[:, 0], vehicle_points[:, 1], 
+                                       s=0.5, c=vehicle_points[:, 2], cmap='viridis', 
+                                       alpha=self.point_cloud_alpha, label='Vehicle Points')
+        
+        # Plot infrastructure point cloud (red-orange colormap) if available
+        if infra_points_transformed is not None and len(infra_points_transformed) > 0:
+            scatter_infra = ax_bev.scatter(infra_points_transformed[:, 0], infra_points_transformed[:, 1], 
+                                         s=0.5, c=infra_points_transformed[:, 2], cmap='Reds', 
+                                         alpha=self.point_cloud_alpha, label='Infrastructure Points')
         
         # Plot boxes on BEV
         for box in boxes:
-            self._plot_box_on_axis(ax1, box)
+            self._plot_box_on_axis(ax_bev, box)
+        
+        # Plot infrastructure position if available
+        self._plot_infrastructure_position(ax_bev, infra_pos, coordinate_system)
         
         # Set BEV axis properties
-        ax1.set_xlim(self.point_cloud_range[0], self.point_cloud_range[2])
-        ax1.set_ylim(self.point_cloud_range[1], self.point_cloud_range[3])
-        ax1.set_xlabel('X (m)')
-        ax1.set_ylabel('Y (m)')
-        ax1.set_title(f'Bird\'s Eye View\n({self.point_cloud_range[0]},{self.point_cloud_range[1]}) to ({self.point_cloud_range[2]},{self.point_cloud_range[3]})')
-        ax1.set_aspect('equal')
-        ax1.grid(True)
+        ax_bev.set_xlim(self.point_cloud_range[0], self.point_cloud_range[2])
+        ax_bev.set_ylim(self.point_cloud_range[1], self.point_cloud_range[3])
+        ax_bev.set_xlabel('X (m)')
+        ax_bev.set_ylabel('Y (m)')
+        coord_label = coordinate_system.upper()
         
-        # Add colorbar for BEV
-        if len(ax1.collections) > 0:
-            cbar = plt.colorbar(ax1.collections[0], ax=ax1)
-            cbar.set_label('Z (height)')
+        title = f'Bird\'s Eye View - {coord_label} Coordinates\n'
+        title += f'({self.point_cloud_range[0]},{self.point_cloud_range[1]}) to ({self.point_cloud_range[2]},{self.point_cloud_range[3]})'
+        if show_infrastructure_points and infra_points_transformed is not None:
+            title += '\nVehicle (Blue-Green) + Infrastructure (Red) Points'
+        ax_bev.set_title(title, fontsize=12)
+        ax_bev.set_aspect('equal')
+        ax_bev.grid(True)
+
+        # Add simple legend for BEV (no box categories, no colorbar)
+        handles = []
+        labels = []
         
-        # Generate image visualization
+        # Add point cloud legend entries
+        if len(vehicle_points) > 0:
+            handles.append(plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=5))
+            labels.append('Vehicle Points')
+        
+        if infra_points_transformed is not None and len(infra_points_transformed) > 0:
+            handles.append(plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=5))
+            labels.append('Infrastructure Points')
+        
+        # Only show legend if there are items to display
+        if handles:
+            ax_bev.legend(handles, labels, loc='upper right')
+        
+        # ===== RIGHT TOP: Vehicle Image with 3D Boxes =====
+        # Generate vehicle image visualization
         image_path = self.get_image(sample_token)
         image = cv2.imread(image_path)
         
-        # Get camera parameters and project boxes
-        camera_param_path = os.path.join(dataroot, "v1.0-trainval/calibrated_sensor.json")
-        with open(camera_param_path, 'r') as f:
-            camera_params = json.load(f)[0]
+        if image is not None:
+            # Get camera parameters and project boxes
+            camera_param_path = os.path.join(dataroot, "v1.0-trainval/calibrated_sensor.json")
+            with open(camera_param_path, 'r') as f:
+                camera_params = json.load(f)[0]
+            
+            cam_intrinsic = camera_params['camera_intrinsic']
+            
+            # Get the sample and transformations
+            sample = self.nusc.get('sample', sample_token)
+            lidar_token = sample['data']['LIDAR_TOP']
+            lidar_data = self.nusc.get('sample_data', lidar_token)
+            lidar_calibrated_sensor = self.nusc.get('calibrated_sensor', lidar_data['calibrated_sensor_token'])
+            lidar_to_ego_mat = self.transform_matrix(lidar_calibrated_sensor['translation'], lidar_calibrated_sensor['rotation'])
+            
+            cam_to_ego_mat = self.transform_matrix_from_rotation_matrix(camera_params['translation'], camera_params['rotation'])
+            ego_to_cam_mat = np.linalg.inv(cam_to_ego_mat)
+            lidar_to_cam_mat = ego_to_cam_mat @ lidar_to_ego_mat
+            
+            # Draw 3D boxes projected to 2D image
+            image_with_boxes = image.copy()
+            for box in boxes:
+                self._draw_box_in_image(image_with_boxes, box, lidar_to_cam_mat, cam_intrinsic)
+            
+            # Display vehicle image
+            ax_vehicle.imshow(cv2.cvtColor(image_with_boxes, cv2.COLOR_BGR2RGB))
+            ax_vehicle.set_title('Vehicle Camera View with 3D Boxes', fontsize=12)
+        else:
+            ax_vehicle.text(0.5, 0.5, 'Vehicle Image\nNot Available', ha='center', va='center', 
+                          transform=ax_vehicle.transAxes, fontsize=16, color='red')
+            ax_vehicle.set_title('Vehicle Camera View', fontsize=12)
         
-        cam_intrinsic = camera_params['camera_intrinsic']
+        ax_vehicle.axis('off')
         
-        # Get the sample and transformations
-        sample = self.nusc.get('sample', sample_token)
-        lidar_token = sample['data']['LIDAR_TOP']
-        lidar_data = self.nusc.get('sample_data', lidar_token)
-        lidar_calibrated_sensor = self.nusc.get('calibrated_sensor', lidar_data['calibrated_sensor_token'])
-        lidar_to_ego_mat = self.transform_matrix(lidar_calibrated_sensor['translation'], lidar_calibrated_sensor['rotation'])
+        # ===== RIGHT BOTTOM: Infrastructure Image (no boxes) =====
+        # Get infrastructure image if available
+        infra_image_displayed = False
+        if infra_pos:
+            infrastructure_frame = infra_pos['infrastructure_frame']
+            infra_image_path = self._get_infrastructure_image(infrastructure_frame)
+            
+            if infra_image_path:
+                infra_image = cv2.imread(infra_image_path)
+                if infra_image is not None:
+                    # Display infrastructure image (no 3D boxes)
+                    ax_infra.imshow(cv2.cvtColor(infra_image, cv2.COLOR_BGR2RGB))
+                    ax_infra.set_title(f'Infrastructure Camera View\nFrame: {infrastructure_frame}', fontsize=12)
+                    infra_image_displayed = True
+                    print(f"Displayed infrastructure image: {infra_image_path}")
         
-        cam_to_ego_mat = self.transform_matrix_from_rotation_matrix(camera_params['translation'], camera_params['rotation'])
-        ego_to_cam_mat = np.linalg.inv(cam_to_ego_mat)
-        lidar_to_cam_mat = ego_to_cam_mat @ lidar_to_ego_mat
+        if not infra_image_displayed:
+            ax_infra.text(0.5, 0.5, 'Infrastructure Image\nNot Available', ha='center', va='center', 
+                        transform=ax_infra.transAxes, fontsize=16, color='red')
+            ax_infra.set_title('Infrastructure Camera View', fontsize=12)
         
-        # Draw 3D boxes projected to 2D image
-        image_with_boxes = image.copy()
-        for box in boxes:
-            self._draw_box_in_image(image_with_boxes, box, lidar_to_cam_mat, cam_intrinsic)
+        ax_infra.axis('off')
         
-        # Display image on right subplot
-        ax2.imshow(cv2.cvtColor(image_with_boxes, cv2.COLOR_BGR2RGB))
-        ax2.set_title('Camera View with 3D Boxes')
-        ax2.axis('off')
-        
-        # Add legend for box categories (shared between both views)
-        handles = []
-        labels = []
-        for category, color in self.category_colors.items():
-            if category != 'default':
-                handle = plt.Rectangle((0, 0), 1, 1, color=color)
-                handles.append(handle)
-                labels.append(category)
-        
-        if handles:
-            fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.95), ncol=len(handles))
-        
-        # Adjust layout
-        plt.tight_layout()
-        plt.subplots_adjust(top=0.9)  # Make room for legend
+        # Adjust layout with tight spacing
+        plt.tight_layout(pad=2.0)
         
         # Save if save_path is provided
         if save_path:
@@ -1290,7 +1345,7 @@ class BEVVisualizer:
         
         plt.close(fig)
         return combined_image
-    
+
     def _plot_box_on_axis(self, ax, box):
         """
         Plot a 3D box in BEV on a specific axis (helper method for combined visualization)
@@ -1442,6 +1497,25 @@ class BEVVisualizer:
             print(f"Error loading infrastructure point cloud {infra_lidar_path}: {e}")
             return None
 
+    def _get_infrastructure_image(self, infrastructure_frame):
+        """
+        Get infrastructure image path for a given infrastructure frame
+        
+        Args:
+            infrastructure_frame: Infrastructure frame token
+            
+        Returns:
+            image_path: Path to the infrastructure image, None if not found
+        """
+        # Construct infrastructure image path
+        infra_image_path = f"data/v2x-seq-nuscenes/cooperative/infrastructure-side/image/{infrastructure_frame}.jpg"
+        
+        if not os.path.exists(infra_image_path):
+            print(f"Warning: Infrastructure image file not found: {infra_image_path}")
+            return None
+        
+        return infra_image_path
+
 # Example usage
 if __name__ == "__main__":
     import argparse
@@ -1455,7 +1529,7 @@ if __name__ == "__main__":
                        help='Index of the scene to visualize')
     parser.add_argument('--sample_idx', type=int, default=0,
                        help='Index of the sample to visualize (if not animating)')
-    parser.add_argument('--range', type=float, nargs=4, default=[0, -50, 100, 50],
+    parser.add_argument('--range', type=float, nargs=4, default=[-10, -60, 110, 60],
                        help='Point cloud range: xmin ymin xmax ymax')
     parser.add_argument('--all_frames', action='store_true',
                        help='Visualize all frames of all scenes in the dataset')
@@ -1464,7 +1538,7 @@ if __name__ == "__main__":
     parser.add_argument('--skip_frames', type=int, default=1,
                        help='Skip every N frames (1=all frames, 2=every other frame, etc.)')
     parser.add_argument('--vis_types', type=str, nargs='+', 
-                       default=['bev'], choices=['bev', 'image', 'combined'],
+                       default=['combined'], choices=['bev', 'image', 'combined'],
                        help='Types of visualizations to generate (for --all_frames)')
     parser.add_argument('--output_dir', type=str, default='bev_output',
                        help='Directory to save the output')
@@ -1532,8 +1606,10 @@ if __name__ == "__main__":
                 visualizer.visualize_image(args.dataroot, sample_token, save_path=output_path_image)
                 print(f"Image visualization saved to {output_path_image}")
             elif vis_type == 'combined':
-                output_path_combined = os.path.join(args.output_dir, f'combined_scene{args.scene_idx}_sample{args.sample_idx}.png')
-                visualizer.visualize_combined(args.dataroot, sample_token, save_path=output_path_combined)
-                print(f"Combined visualization saved to {output_path_combined}")
+                output_path_combined = os.path.join(args.output_dir, f'combined_scene{args.scene_idx}_sample{args.sample_idx}_{args.coordinate_system}.png')
+                visualizer.visualize_combined(args.dataroot, sample_token, save_path=output_path_combined,
+                                            coordinate_system=args.coordinate_system,
+                                            show_infrastructure_points=args.show_infrastructure_points)
+                print(f"Combined visualization ({args.coordinate_system} coordinates) saved to {output_path_combined}")
             else:
                 print(f"Unknown visualization type: {vis_type}") 

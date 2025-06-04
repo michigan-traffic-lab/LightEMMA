@@ -1,0 +1,2 @@
+opencv-python>=4.5.0
+pathlib2>=2.3.5; python_version < '3.4' 

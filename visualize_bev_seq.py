@@ -610,6 +610,7 @@ class BEVSequenceVisualizer:
             background_points: Point cloud background points
             show_ego_axes: Whether to show ego coordinate axes
         """
+        
         # Get scene and map info
         sample = self.nusc.get('sample', current_point['sample_token'])
         scene = self.nusc.get('scene', sample['scene_token'])

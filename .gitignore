@@ -6,3 +6,4 @@ bev_output/
 trajectory_output/
 
 *.out
+*.mp4
